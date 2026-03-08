@@ -1,0 +1,565 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Decimal Stack">
+<title>Decimal Stack</title>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@300;400;600;700;800&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg:       #FDF6F0;
+    --pastel0:  #FFB3C6; /* pink */
+    --pastel1:  #FFD6A5; /* peach */
+    --pastel2:  #CAFFBF; /* mint */
+    --pastel3:  #A0C4FF; /* sky */
+    --pastel4:  #BDB2FF; /* lavender */
+    --pastel5:  #FFC6FF; /* lilac */
+    --pastel6:  #FDFFB6; /* lemon */
+    --pastel7:  #9BF6FF; /* cyan */
+    --text:     #3D3440;
+    --muted:    #A099A8;
+    --shadow:   rgba(100,80,120,0.13);
+    --font: 'Nunito', sans-serif;
+  }
+
+  html, body {
+    height: 100%;
+    overflow: hidden;
+    background: var(--bg);
+    font-family: var(--font);
+    color: var(--text);
+    touch-action: none;
+    -webkit-tap-highlight-color: transparent;
+    user-select: none;
+  }
+
+  /* ── Layout ── */
+  #app {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+
+  /* ── HUD ── */
+  #hud {
+    width: 100%;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    padding: 52px 24px 0;
+    position: relative;
+    z-index: 10;
+    pointer-events: none;
+  }
+
+  .hud-box {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .hud-label {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+
+  .hud-value {
+    font-size: 22px;
+    font-weight: 800;
+    color: var(--text);
+    letter-spacing: 0.01em;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .hud-value.time { font-size: 19px; letter-spacing: 0.04em; }
+
+  /* ── Canvas ── */
+  #gameCanvas {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    display: block;
+  }
+
+  /* ── Overlays ── */
+  .overlay {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background: rgba(253,246,240,0.92);
+    backdrop-filter: blur(6px);
+    z-index: 100;
+    padding: 32px 28px;
+    text-align: center;
+    gap: 0;
+  }
+
+  .overlay.hidden { display: none; }
+
+  .overlay-title {
+    font-size: 38px;
+    font-weight: 800;
+    color: var(--text);
+    line-height: 1.1;
+    margin-bottom: 6px;
+  }
+
+  .overlay-sub {
+    font-size: 15px;
+    color: var(--muted);
+    font-weight: 600;
+    margin-bottom: 36px;
+    line-height: 1.5;
+  }
+
+  .stat-row {
+    display: flex;
+    gap: 20px;
+    margin-bottom: 36px;
+  }
+
+  .stat-box {
+    background: #fff;
+    border-radius: 16px;
+    padding: 16px 22px;
+    box-shadow: 0 4px 20px var(--shadow);
+    min-width: 110px;
+  }
+
+  .stat-box .s-label {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 4px;
+  }
+
+  .stat-box .s-val {
+    font-size: 26px;
+    font-weight: 800;
+    color: var(--text);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .big-btn {
+    background: var(--text);
+    color: #fff;
+    border: none;
+    border-radius: 100px;
+    padding: 16px 44px;
+    font-family: var(--font);
+    font-size: 17px;
+    font-weight: 700;
+    cursor: pointer;
+    box-shadow: 0 6px 24px var(--shadow);
+    transition: transform 0.1s, box-shadow 0.1s;
+    letter-spacing: 0.01em;
+  }
+
+  .big-btn:active { transform: scale(0.96); box-shadow: 0 2px 10px var(--shadow); }
+
+  .tap-hint {
+    margin-top: 20px;
+    font-size: 13px;
+    color: var(--muted);
+    font-weight: 600;
+  }
+
+  /* block colour stripe at top of overlay title */
+  .color-dots {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 20px;
+    justify-content: center;
+  }
+
+  .color-dot {
+    width: 12px; height: 12px;
+    border-radius: 50%;
+  }
+</style>
+</head>
+<body>
+<div id="app">
+  <canvas id="gameCanvas"></canvas>
+
+  <!-- HUD (shown during play) -->
+  <div id="hud">
+    <div class="hud-box">
+      <div class="hud-label">Survived</div>
+      <div class="hud-value time" id="hudTime">00:00:00</div>
+    </div>
+    <div class="hud-box" style="text-align:right">
+      <div class="hud-label">Height</div>
+      <div class="hud-value" id="hudHeight">0</div>
+    </div>
+  </div>
+
+  <!-- Start screen -->
+  <div class="overlay" id="startScreen">
+    <div class="color-dots">
+      <div class="color-dot" style="background:var(--pastel0)"></div>
+      <div class="color-dot" style="background:var(--pastel1)"></div>
+      <div class="color-dot" style="background:var(--pastel2)"></div>
+      <div class="color-dot" style="background:var(--pastel3)"></div>
+      <div class="color-dot" style="background:var(--pastel4)"></div>
+    </div>
+    <div class="overlay-title">Decimal<br>Stack</div>
+    <div class="overlay-sub">Tap to drop each block.<br>Stack as high as you can.<br>Your score is decimal time survived.</div>
+    <button class="big-btn" id="startBtn">Start stacking</button>
+    <div class="tap-hint">Score shown as decimal HH:MM:SS</div>
+  </div>
+
+  <!-- Game over screen -->
+  <div class="overlay hidden" id="gameOverScreen">
+    <div class="color-dots" id="goDots"></div>
+    <div class="overlay-title">Nice<br>Stack!</div>
+    <div class="overlay-sub" id="goSub">You survived…</div>
+    <div class="stat-row">
+      <div class="stat-box">
+        <div class="s-label">Time</div>
+        <div class="s-val" id="goTime">00:00:00</div>
+      </div>
+      <div class="stat-box">
+        <div class="s-label">Height</div>
+        <div class="s-val" id="goHeight">0</div>
+      </div>
+    </div>
+    <button class="big-btn" id="restartBtn">Try again</button>
+  </div>
+</div>
+
+<script>
+// ── Decimal time ──────────────────────────────────────────────────────────────
+function msToDecimal(ms) {
+  // 1 decimal day = 86400000 ms
+  // 1 decimal hour = 8640000 ms
+  // 1 decimal minute = 86400 ms
+  // 1 decimal second = 864 ms
+  const totalDecSec = ms / 864;
+  const dh = Math.floor(totalDecSec / 10000);
+  const dm = Math.floor((totalDecSec % 10000) / 100);
+  const ds = Math.floor(totalDecSec % 100);
+  return `${String(dh).padStart(2,'0')}:${String(dm).padStart(2,'0')}:${String(ds).padStart(2,'0')}`;
+}
+
+// ── Canvas setup ──────────────────────────────────────────────────────────────
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+let W, H;
+
+function resize() {
+  W = canvas.width  = window.innerWidth;
+  H = canvas.height = window.innerHeight;
+}
+resize();
+window.addEventListener('resize', () => { resize(); if (state === 'playing') drawGame(); });
+
+// ── Pastel palette ────────────────────────────────────────────────────────────
+const PASTELS = [
+  '#FFB3C6','#FFD6A5','#CAFFBF','#A0C4FF',
+  '#BDB2FF','#FFC6FF','#FDFFB6','#9BF6FF'
+];
+let colorIdx = 0;
+function nextColor() { const c = PASTELS[colorIdx % PASTELS.length]; colorIdx++; return c; }
+
+// ── Game constants ────────────────────────────────────────────────────────────
+const BLOCK_H      = 40;
+const INITIAL_W    = 220;
+const MIN_W        = 40;
+const SWING_SPEED  = 2.2;   // px per frame at start
+const SPEED_INC    = 0.08;  // speed increase per block
+const MAX_SPEED    = 9;
+const STACK_BOTTOM_OFFSET = 120; // px from bottom
+
+// ── Game state ────────────────────────────────────────────────────────────────
+let state = 'start'; // start | playing | over
+let blocks = [];      // { x, y, w, color }
+let swinging = null;  // { x, w, dir, color, y }
+let swingSpeed = SWING_SPEED;
+let stackHeight = 0;
+let startTime = 0;
+let elapsed = 0;
+let animId = null;
+let cameraY = 0;      // how many px we've scrolled up
+let perfectStreak = 0;
+
+function stackBaseY() { return H - STACK_BOTTOM_OFFSET; }
+
+// ── Init game ─────────────────────────────────────────────────────────────────
+function initGame() {
+  colorIdx = 0;
+  blocks = [];
+  swingSpeed = SWING_SPEED;
+  stackHeight = 0;
+  cameraY = 0;
+  perfectStreak = 0;
+  elapsed = 0;
+  startTime = performance.now();
+
+  // Base block
+  const baseW = INITIAL_W;
+  const baseX = W / 2 - baseW / 2;
+  blocks.push({ x: baseX, y: stackBaseY() - BLOCK_H, w: baseW, color: nextColor() });
+
+  spawnSwinging();
+}
+
+function spawnSwinging() {
+  const topBlock = blocks[blocks.length - 1];
+  const w = topBlock.w;
+  const y = topBlock.y - BLOCK_H - cameraY; // screen-space y of new block
+  swinging = {
+    x: 0,
+    w,
+    dir: 1,
+    color: nextColor(),
+    stackY: topBlock.y - BLOCK_H, // world-space y
+  };
+}
+
+// ── Drop logic ────────────────────────────────────────────────────────────────
+function drop() {
+  if (state !== 'playing' || !swinging) return;
+
+  const top = blocks[blocks.length - 1];
+  const sw = swinging;
+
+  // Overlap
+  const left  = Math.max(sw.x, top.x);
+  const right = Math.min(sw.x + sw.w, top.x + top.w);
+  const overlap = right - left;
+
+  if (overlap <= 0) {
+    // Missed entirely
+    endGame();
+    return;
+  }
+
+  // Perfect bonus (within 4px)
+  const isPerfect = Math.abs(sw.x - top.x) < 4 && Math.abs(sw.w - top.w) < 4;
+  let newW, newX;
+  if (isPerfect) {
+    newW = top.w;
+    newX = top.x;
+    perfectStreak++;
+    showPerfect();
+  } else {
+    newW = overlap;
+    newX = left;
+    perfectStreak = 0;
+  }
+
+  if (newW < MIN_W) { endGame(); return; }
+
+  // Place block
+  const newY = top.y - BLOCK_H;
+  blocks.push({ x: newX, y: newY, w: newW, color: sw.color });
+  stackHeight++;
+
+  // Camera scroll — keep top block visible with room
+  const screenY = newY - cameraY;
+  const threshold = H * 0.38;
+  if (screenY < threshold) {
+    cameraY += threshold - screenY;
+  }
+
+  swingSpeed = Math.min(MAX_SPEED, SWING_SPEED + stackHeight * SPEED_INC);
+  spawnSwinging();
+}
+
+// ── Perfect flash ─────────────────────────────────────────────────────────────
+let perfectAlpha = 0;
+function showPerfect() { perfectAlpha = 1; }
+
+// ── Drawing ───────────────────────────────────────────────────────────────────
+function drawGame() {
+  ctx.clearRect(0, 0, W, H);
+
+  // Soft gradient bg
+  const grad = ctx.createLinearGradient(0, 0, 0, H);
+  grad.addColorStop(0, '#EEF6FF');
+  grad.addColorStop(1, '#FDF6F0');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, W, H);
+
+  // Draw placed blocks
+  for (const b of blocks) {
+    const sy = b.y - cameraY;
+    drawBlock(b.x, sy, b.w, BLOCK_H, b.color);
+  }
+
+  // Draw swinging block
+  if (swinging) {
+    const sy = swinging.stackY - cameraY - BLOCK_H;
+    drawBlock(swinging.x, sy, swinging.w, BLOCK_H, swinging.color);
+
+    // Pendulum rope (subtle)
+    ctx.save();
+    ctx.strokeStyle = 'rgba(180,170,200,0.3)';
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([4, 6]);
+    ctx.beginPath();
+    ctx.moveTo(swinging.x + swinging.w / 2, 0);
+    ctx.lineTo(swinging.x + swinging.w / 2, sy);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.restore();
+  }
+
+  // "PERFECT" flash
+  if (perfectAlpha > 0) {
+    ctx.save();
+    ctx.globalAlpha = perfectAlpha;
+    ctx.font = `800 28px ${getComputedStyle(document.body).fontFamily}`;
+    ctx.fillStyle = '#BDB2FF';
+    ctx.textAlign = 'center';
+    ctx.fillText('✦ PERFECT ✦', W / 2, H / 2);
+    ctx.restore();
+    perfectAlpha = Math.max(0, perfectAlpha - 0.03);
+  }
+
+  // Ground line
+  const groundY = stackBaseY() - cameraY;
+  ctx.save();
+  ctx.strokeStyle = 'rgba(180,170,200,0.25)';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(0, groundY + BLOCK_H);
+  ctx.lineTo(W, groundY + BLOCK_H);
+  ctx.stroke();
+  ctx.restore();
+}
+
+function drawBlock(x, y, w, h, color) {
+  const r = 10;
+  ctx.save();
+
+  // Shadow
+  ctx.shadowColor = 'rgba(120,100,150,0.15)';
+  ctx.shadowBlur = 12;
+  ctx.shadowOffsetY = 4;
+
+  // Fill
+  ctx.fillStyle = color;
+  roundRect(ctx, x, y, w, h, r);
+  ctx.fill();
+
+  // Subtle top sheen
+  ctx.shadowBlur = 0;
+  ctx.shadowOffsetY = 0;
+  const sheen = ctx.createLinearGradient(x, y, x, y + h * 0.5);
+  sheen.addColorStop(0, 'rgba(255,255,255,0.35)');
+  sheen.addColorStop(1, 'rgba(255,255,255,0)');
+  ctx.fillStyle = sheen;
+  roundRect(ctx, x, y, w, h, r);
+  ctx.fill();
+
+  ctx.restore();
+}
+
+function roundRect(ctx, x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.lineTo(x + w - r, y);
+  ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+  ctx.lineTo(x + w, y + h - r);
+  ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+  ctx.lineTo(x + r, y + h);
+  ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+  ctx.lineTo(x, y + r);
+  ctx.quadraticCurveTo(x, y, x + r, y);
+  ctx.closePath();
+}
+
+// ── Game loop ─────────────────────────────────────────────────────────────────
+function loop(ts) {
+  if (state !== 'playing') return;
+
+  elapsed = ts - startTime;
+
+  // Swing
+  if (swinging) {
+    swinging.x += swingSpeed * swinging.dir;
+    if (swinging.x + swinging.w >= W - 10) { swinging.x = W - 10 - swinging.w; swinging.dir = -1; }
+    if (swinging.x <= 10) { swinging.x = 10; swinging.dir = 1; }
+  }
+
+  drawGame();
+
+  // Update HUD
+  document.getElementById('hudTime').textContent = msToDecimal(elapsed);
+  document.getElementById('hudHeight').textContent = stackHeight;
+
+  animId = requestAnimationFrame(loop);
+}
+
+// ── End game ──────────────────────────────────────────────────────────────────
+function endGame() {
+  state = 'over';
+  cancelAnimationFrame(animId);
+
+  // Final draw with fallen block animation would be nice — for now just show overlay
+  const timeStr = msToDecimal(elapsed);
+  document.getElementById('goTime').textContent = timeStr;
+  document.getElementById('goHeight').textContent = stackHeight;
+
+  let sub = 'Keep going next time!';
+  if (stackHeight >= 30) sub = 'Incredible stacking! 🌟';
+  else if (stackHeight >= 20) sub = 'Great reflexes! 🎉';
+  else if (stackHeight >= 10) sub = 'Getting the feel for it!';
+  document.getElementById('goSub').textContent = sub;
+
+  // Colour the dots in game-over screen
+  const dotsEl = document.getElementById('goDots');
+  dotsEl.innerHTML = '';
+  for (let i = 0; i < 5; i++) {
+    const d = document.createElement('div');
+    d.className = 'color-dot';
+    d.style.background = PASTELS[i % PASTELS.length];
+    dotsEl.appendChild(d);
+  }
+
+  document.getElementById('gameOverScreen').classList.remove('hidden');
+}
+
+// ── Controls ──────────────────────────────────────────────────────────────────
+function handleTap() {
+  if (state === 'playing') drop();
+}
+
+canvas.addEventListener('touchstart', e => { e.preventDefault(); handleTap(); }, { passive: false });
+canvas.addEventListener('mousedown', handleTap);
+document.addEventListener('keydown', e => { if (e.code === 'Space') handleTap(); });
+
+document.getElementById('startBtn').addEventListener('click', () => {
+  document.getElementById('startScreen').classList.add('hidden');
+  state = 'playing';
+  initGame();
+  animId = requestAnimationFrame(loop);
+});
+
+document.getElementById('restartBtn').addEventListener('click', () => {
+  document.getElementById('gameOverScreen').classList.add('hidden');
+  state = 'playing';
+  initGame();
+  animId = requestAnimationFrame(loop);
+});
+</script>
+</body>
+</html>
